@@ -6,14 +6,30 @@
 using namespace std;
  
 typedef float state_type; 
+typedef float action_type;
 //features for state of MDP 
+
+struct transition_prob
+{
+    action_type for_click;
+    action_type for_price;
+    action_type for_end;
+};
+
 struct features
  {
     state_type  pclick;
     state_type relevance;
     state_type bid;
     
+    state_type reward;
     
+    int best_action;  //this will be used for policy pi(s)-> a
+    
+    float state_value; //this will be used ofr storing the value of a state
+
+    struct transition_prob t_p;
+
     features(state_type pclick, state_type relevance,state_type bid): pclick(pclick), relevance(relevance),bid(bid) {}
 
     state_type* get_feature()
@@ -22,7 +38,18 @@ struct features
             return feature_vector;
             
         }   
-       
+    
+    void set_reward()
+    {   //some random way
+        reward=pclick*.8+relevance*.1+bid*.1;
+    }
+
+    void set_transition_prob()
+    {
+        t_p.for_click=.8*pclick;
+        t_p.for_price=1- pclick;
+        t_p.for_end=.2*pclick;
+    }
 }; 
 
 struct AdjListNode
@@ -58,6 +85,10 @@ class Graph
             AdjListNode* newNode = new AdjListNode;
             newNode->state_id=state_id;
             newNode->feature_vector=feature_vector;
+
+            //set reward based on feature parameter
+            newNode->feature_vector->set_reward();
+            newNode->feature_vector->set_transition_prob();
             newNode->next = NULL;
             return newNode;
         }
@@ -81,12 +112,31 @@ class Graph
                 while (pCrawl)
                 {
                     cout<<"-> "<<pCrawl->state_id<<"("<<pCrawl->feature_vector->pclick<<","<<pCrawl->feature_vector->relevance<<","<<pCrawl->feature_vector->bid<<")";
+                    //cout<<"("<<pCrawl->feature_vector->reward<<","<<pCrawl->feature_vector->t_p.for_price<<") " ; //these are showing reward and transition prob
                     //state=pCrawl->feature_vector->get_feature()<<" "; //these are state values 
                     pCrawl = pCrawl->next;
                 }
                 cout<<endl;
             }
         }
+};
+
+
+// Class MDP
+class MDP
+{
+    private:
+        int V;
+        struct AdjList* array;
+    public:
+        Graph(int V)
+        {
+            this->V = V;
+            array = new AdjList [V];
+            for (int i = 0; i < V; ++i)
+                array[i].head = NULL;
+        }
+        
 };
  
 //main function 
@@ -115,7 +165,7 @@ int main()
     gh.printGraph();
  
 
-    
- 
+
+
     return 0;
 }

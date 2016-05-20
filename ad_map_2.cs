@@ -4,13 +4,7 @@ using System.Linq;
 namespace Ad_graph
 {
 
-   struct Transition_prob
-   {
-      public double for_click,for_price,for_end;
-   };
-
-
-
+   
    struct State
    {  
 
@@ -24,17 +18,18 @@ namespace Ad_graph
     
       public double state_value; //this will be used ofr storing the value of a state
 
-      public Transition_prob t_p;
+      public double [] for_click,for_price,for_end;
+      
+      public int no_nodes_linked;
 
-
-      public State(double pclick_, double relevance_,double bid_,int state_no):this()
+      public State(double pclick_, double relevance_,double bid_,int state_no,int no_nodes_linked):this()
          {
             this.pclick=pclick_; 
             this.relevance=relevance_;
             this.bid=bid_; 
 
             this.state_no=state_no;
-
+            this.no_nodes_linked=no_nodes_linked;
             //calulating the reward and transition probability
             set_reward();
             set_transition_prob();
@@ -54,9 +49,18 @@ namespace Ad_graph
 
       public void set_transition_prob()
       {
-         t_p.for_click=.8*pclick;
-         t_p.for_price=1- pclick;
-         t_p.for_end=.2*pclick;
+
+        for_price=new double[no_nodes_linked];
+        for_end=new double[no_nodes_linked];
+        for_click=new double[no_nodes_linked];
+
+
+        for (int i=0;i<no_nodes_linked;i++)
+        {
+         for_click[i]=1.0/no_nodes_linked; //.8*pclick;
+         for_price[i]=1.0/no_nodes_linked;//1- pclick;
+         for_end[i]=1.0/no_nodes_linked;//.2*pclick;
+       }
       } 
 
       public void set_best_action(int best)
@@ -85,47 +89,42 @@ namespace Ad_graph
    
    class AdjacencyList
     {
-        public LinkedList<State>[] adjacencyList;
+        public List<State>[] adjacencyList;
         
         // Constructor - creates an empty Adjacency List
         public AdjacencyList(int vertices)
         {
-            adjacencyList = new LinkedList<State>[vertices];
+            adjacencyList = new List<State>[vertices];
 
  
             for (int i = 0; i < adjacencyList.Length; ++i)
             {
-                adjacencyList[i] = new LinkedList<State>();
+                adjacencyList[i] = new List<State>();
             }
         }
  
         // Appends a new Edge to the linked list
-        public void addEdgeAtEnd(int startVertex, State s)
+        public void addEdge(int startVertex, State s)
         {
-            adjacencyList[startVertex].AddLast(s);
+            adjacencyList[startVertex].Add(s);
         }
  
-        // Adds a new Edge to the linked list from the front
-        public void addEdgeAtBegin(int startVertex, State s)
-        {
-            adjacencyList[startVertex].AddFirst(s);
-        }
- 
+       
  
         // Returns a copy of the Linked List of outward edges from a vertex
-         public LinkedList<State> get_linked_nodes(int index)
+         public List<State> get_linked_nodes(int index)
          {
             
-            LinkedList<State> edgeList
-                               = new LinkedList<State>(adjacencyList[index]);
+            List<State> edgeList = new List<State>(adjacencyList[index]);
             return edgeList;
          }
  
 
         // this is wrong implementation
-        public State get_node(int index)
-        {
-          return adjacencyList[index].ElementAt(index);
+        public State get_node(int list_index,int node_index)
+        { 
+          
+          return adjacencyList[list_index][node_index];
         }      
 
         // Prints the Adjacency List
@@ -133,17 +132,17 @@ namespace Ad_graph
         {
             int i = 0;
  
-            foreach (LinkedList<State> list in adjacencyList)
+            foreach (List<State> list in adjacencyList)
             {
                 Console.Write("adjacencyList[" + i + "] -> ");
  
                 foreach (State edge in list)
                 {
-                    Console.Write("(" + edge.reward + " "+edge.t_p.for_price +")  ");
+                    Console.Write("(" + edge.reward + " "+edge.for_price +")  ");
                 }
  
                 ++i;
-                Console.WriteLine();
+                
             }
         }
  
@@ -180,61 +179,63 @@ namespace Ad_graph
                     pclick = (double)rnd.Next(1, 101)/100; 
                     relevance= (double)rnd.Next(1, 101)/100;
                     bid=(double)rnd.Next(1, 101)/100;
-                    ad_graph.addEdgeAtEnd(i,new State(pclick,relevance,bid,j));
+                    ad_graph.addEdge(i,new State(pclick,relevance,bid,j,no_states));
                 }    
          }
 
          return ad_graph;
       }
 
-      public void  show_adjacent_nodes(int index)
-      {
-          LinkedList<State> edgeList=ad_graph.get_linked_nodes(index);
       
-          foreach (State edge in edgeList)
-                {
-                    //Console.Write("(" + edge.reward + " "+edge.t_p.for_price +")  ");
-                  Console.Write("("   + edge.get_best_action() + " "+edge.get_state_value()+")  ");
-                } 
-      }
-
       
      public int policy_per_state(int index_state)
       {
         //get all nodes which are connected to main index_state node
-        LinkedList<State> edgeList=ad_graph.get_linked_nodes(index_state);
+        List<State> edgeList=ad_graph.get_linked_nodes(index_state);
+
+        State main_node=ad_graph.get_node(index_state,index_state);
 
         double [] pi=new double[3];
         
         foreach ( State node in edgeList)
                 {
-                    pi[0]+= node.t_p.for_click * ( node.reward + gamma*node.state_value ) ;
-                    pi[1]+= node.t_p.for_price * ( node.reward + gamma*node.state_value ) ;
-                    pi[2]+= node.t_p.for_end   * ( node.reward + gamma*node.state_value ) ;
+                    int index=node.state_no;
+                    pi[0]+= main_node.for_click[index] * ( node.reward + gamma*node.state_value ) ;
+                    pi[1]+= main_node.for_price[index] * ( node.reward + gamma*node.state_value ) ;
+                    pi[2]+= main_node.for_end[index]   * ( node.reward + gamma*node.state_value ) ;
               
                 } 
 
-       double max = pi[0];
-       int index=0; 
+       
+        double max = pi[0];
+        int pos=0; 
         for (int i = 0; i < pi.Length; i++) 
-        { 
-          if (pi[i] > max) {max = pi[i];index=i;} 
-        } 
+          { 
+            if (pi[i] > max) {max = pi[i];pos=i;} 
+          } 
         //Console.WriteLine("pi: {0} {1} {2}", pi[0],pi[1],pi[2]);
 
 
-       return   index;
-
-
-       
+        return   pos;
+      
       }
 
       public void  policy()
       {
-        //putting max action to best_action
+        //calculating best action for all states.
         for(int i=0;i<no_states;i++)
         {
-         ad_graph.get_node(i).set_best_action(2);//policy_per_state(i));
+
+         
+         int best_action=policy_per_state(i);
+
+         for(int k =0;k<no_states;k++)
+            {
+              State temp_node=ad_graph.get_node(k,i);
+              temp_node.set_best_action(best_action);
+              ad_graph.adjacencyList[k][i]=temp_node; 
+            }
+         
         } 
       }
 
@@ -244,43 +245,54 @@ namespace Ad_graph
         
         for(int i=0;i<no_states;i++)
         {
-          //get main node for every iteration
-          State main_node=ad_graph.get_node(i);
-          //Console.WriteLine("({0} {1} )",main_node.state_no,i); // to check if the get_node is giving correct node 
+          //get main_node 
+          State main_node=ad_graph.get_node(i,i);
+           
+          int main_node_index=main_node.state_no; // this is also equal to i 
+          int best_action=policy_per_state(main_node_index);
 
-          // this for loop is for fingind utility for each node
-          LinkedList<State> edgeList=ad_graph.get_linked_nodes(i); 
+         
+          //get the linked nodes to main_node
+          List<State> edgeList=ad_graph.get_linked_nodes(i); 
           double value_=0;
 
+          //calculate utility for each node
           foreach (State node in edgeList)
                 {
-                  int node_index=node.state_no;
+                  int node_linked_index=node.state_no;
+                  
 
-                  if (policy_per_state(node_index)==0)
-                    {//Console.WriteLine("act 1");
-                    value_+=node.t_p.for_click * ( node.reward + gamma*node.state_value ) ;
+                  if (best_action==0)
+                    { //Console.WriteLine("{0} {1} {2} {3} {4}",0,node.reward,node.state_value,node.state_no,main_node_index);
+                      value_+=main_node.for_click[node_linked_index] * ( node.reward + gamma*node.state_value ) ;
                     }
 
-                  else if (policy_per_state(node_index)==1)  
-                    {//Console.WriteLine("act 2");
-                    value_+=node.t_p.for_price * ( node.reward + gamma*node.state_value ) ;
+                  else if (best_action==1)  
+                    {  //Console.WriteLine("{0} {1} {2} {3} {4}",1,node.reward,node.state_value,node.state_no,main_node_index);
+                      value_+=main_node.for_price[node_linked_index] * ( node.reward + gamma*node.state_value ) ;
                     }
 
-                  else if (policy_per_state(node_index)==2) 
-                    {//Console.WriteLine("act 3");
-                    value_+=node.t_p.for_end * ( node.reward + gamma*node.state_value ) ;
+                  else if (best_action==2) 
+                    {  //Console.WriteLine("{0} {1} {2} {3} {4}",2,node.reward,node.state_value,node.state_no,main_node_index);
+                      value_+=main_node.for_end[node_linked_index] * ( node.reward + gamma*node.state_value ) ;
                     }
 
-                }//inner for loop ends
+                } //inner for loop ends
 
           main_node.set_state_value(value_);     // here we  put utility in state node  
+          
+          ad_graph.adjacencyList[i][i]=main_node;
 
-         // Console.WriteLine("VI {0} {1}",i ,main_node.get_state_value()); 
+          for(int k =0;k<no_states;k++)
+            {
+              State temp_node=ad_graph.get_node(k,main_node_index);
+              temp_node.set_state_value(value_);
+              ad_graph.adjacencyList[k][main_node_index]=temp_node; 
+            }
+          Console.WriteLine("VI {0} {1} ",i ,main_node.get_state_value(),ad_graph.adjacencyList[i][i].get_state_value()); 
           
         }// outer for loop ends
 
-         //Console.WriteLine("VI {0} ",ad_graph.get_node(55).get_state_value()); 
-        //Console.WriteLine(main_node.state_value);    
         
         
       }
@@ -296,12 +308,11 @@ namespace Ad_graph
               for (int j=0;j<100;j++)
               {
                 value_iteration();
-
-                for(int l=0;l<100;l++)
-                   //mdp.show_adjacent_nodes(l);
-                  Console.WriteLine("{0} ",ad_graph.get_node(i).get_state_value());
               }
-            }
+              //Console.WriteLine("VI {0} ",ad_graph.get_node(55,55).get_state_value()); 
+       
+              //Console.WriteLine("{0}",ad_graph.get_node(55,55).get_best_action());
+              }
         
       }
 
@@ -313,25 +324,9 @@ namespace Ad_graph
       static void Main(string[] args)
       {
          
-         
         MDP mdp=new MDP();
-        mdp.Bellmen_convergence();
-        /*for (int i=0;i<100;i++)
-            {
-              Console.WriteLine("{0} ",  i);
-              mdp.policy();
-              for (int j=0;j<100;j++)
-              {
-                mdp.value_iteration();
 
-                for(int l=0;l<100;l++)
-                   //mdp.show_adjacent_nodes(l);
-                  Console.WriteLine("{0} ",mdp.ad_graph.get_node(i).get_state_value());
-              }
-            }
-         */   
-         //adjacencyList.printAdjacencyList();
-         
+        mdp.Bellmen_convergence();
          
       }
    }
